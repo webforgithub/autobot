@@ -15,6 +15,7 @@ use App\Console\Commands\TradingPairsBinanceCommand;
 use App\Console\Commands\TestMACDStrategiesCommand;
 use App\Console\Commands\CheckBalanceCommand;
 use App\Console\Commands\CheckOrderStatusCommand;
+use App\Console\Commands\AlertMACDStrategiesCommand;
 
 class Kernel extends ConsoleKernel {
 
@@ -32,10 +33,11 @@ class Kernel extends ConsoleKernel {
         ShortStrategiesCommand::class,
         SignalsExampleCommand::class,
         TradingPairsBinanceCommand::class,
-        TestShortStrategiesCommand::class,
-        TestMACDStrategiesCommand::class,
+//        TestShortStrategiesCommand::class,
+//        TestMACDStrategiesCommand::class,
         CheckBalanceCommand::class,
-        CheckOrderStatusCommand::class
+        CheckOrderStatusCommand::class,
+        AlertMACDStrategiesCommand::class
     ];
 
     /**
@@ -48,14 +50,17 @@ class Kernel extends ConsoleKernel {
         //$schedule->command('MACD:PlaceOrder')->cron('*/30 * * * * *');                 
         //$schedule->command('autobot:datarunner_coinigy')->withoutOverlapping()->everyMinute();
         
+//        $schedule->command('autobot:datarunner_binance')->withoutOverlapping()->everyMinute();  
         $schedule->command('autobot:tradingpairs_binance')->withoutOverlapping()->daily();        
-        $schedule->command('autobot:datarunner_binance')->withoutOverlapping()->everyMinute();  
         $schedule->command('autobot:checkbalance')->withoutOverlapping()->everyMinute();
         $schedule->command('autobot:checkorderstatus')->withoutOverlapping()->everyMinute();
-		
-//		$filePath = storage_path(date('Y-m-d'));
-//        $schedule->command('autobot:testmacd_strategies')->withoutOverlapping()->appendOutputTo($filePath)->everyMinute();
         
+        $filePath = storage_path(date('Y-m-d').'-Alert-MACD-BuySell.log');
+        $schedule->command('autobot:alertmacd_strategies')->withoutOverlapping()->appendOutputTo($filePath)->everyMinute();
+		
+//        $filePath = storage_path(date('Y-m-d').'-MACD-BuySell');
+//        $schedule->command('autobot:testmacd_strategies')->withoutOverlapping()->appendOutputTo($filePath)->everyMinute();
+       
 //        $schedule->command('autobot:testmacd_strategies')->withoutOverlapping()->everyTenMinutes();
          
 //        $schedule->command('autobot:datarunner_binance')->withoutOverlapping()->everyMinute();

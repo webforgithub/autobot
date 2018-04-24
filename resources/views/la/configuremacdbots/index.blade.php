@@ -69,17 +69,21 @@
 					@la_input($module, 'alert_mobile')
 					@la_input($module, 'volume')
 					@la_input($module, 'totalorder')
-					@la_input($module, 'period')
+					{{--
+                                        @la_input($module, 'period')
 					@la_input($module, 'period_length')
 					@la_input($module, 'min_periods')
-					@la_input($module, 'ema_short_period')
+					--}}
+                                        @la_input($module, 'ema_short_period')
 					@la_input($module, 'ema_long_period')
 					@la_input($module, 'signal_period')
-					@la_input($module, 'up_trend_threshold')
+					{{--
+                                        @la_input($module, 'up_trend_threshold')
 					@la_input($module, 'down_trend_threshold')
 					@la_input($module, 'overbought_periods')
 					@la_input($module, 'overbought_rsi')
 					@la_input($module, 'use_all_fund')
+                                        --}}
                                         <input type="hidden" name="userid" id="userid" />
 					{{--
 					@la_input($module, 'symbol')

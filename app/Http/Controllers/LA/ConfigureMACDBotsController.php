@@ -26,7 +26,8 @@ class ConfigureMACDBotsController extends Controller {
 
     public $show_action = true;
     public $view_col = 'symbol';
-    public $listing_cols = ['id', 'symbol', 'userid', 'alert_email', 'alert_mobile', 'volume', 'totalorder', 'period', 'period_length', 'min_periods', 'ema_short_period', 'ema_long_period', 'signal_period', 'up_trend_threshold', 'down_trend_threshold', 'overbought_periods', 'overbought_rsi', 'use_all_fund'];
+    //public $listing_cols = ['id', 'symbol', 'userid', 'alert_email', 'alert_mobile', 'volume', 'totalorder', 'period', 'period_length', 'min_periods', 'ema_short_period', 'ema_long_period', 'signal_period', 'up_trend_threshold', 'down_trend_threshold', 'overbought_periods', 'overbought_rsi', 'use_all_fund'];
+    public $listing_cols = ['id', 'symbol', 'userid', 'alert_email', 'alert_mobile', 'volume', 'totalorder', 'ema_short_period', 'ema_long_period', 'signal_period'];
     public $APIKey = '6N9ih2aoSMqAkoHVvs8M4SMy2GwCyQooqLZWmgu8dwJAyIYkB36LhjCpQqTOvGCp';
     public $ScreateKey = 'bnbsT9gIzPuSHLhaqMt7j4eE914Y6hvFPrO8VVz768kC3lI8j6GGWMFdFtnoukpb';
     public $WebSocketKey = '';
@@ -239,7 +240,12 @@ class ConfigureMACDBotsController extends Controller {
      * @return
      */
     public function dtajax() {
-        $values = DB::table('configuremacdbots')->select($this->listing_cols)->whereNull('deleted_at')->where('userid', '=', Auth::user()->id);
+        
+        if(\Entrust::hasRole('SUPER_ADMIN')) {        
+            $values = DB::table('configuremacdbots')->select($this->listing_cols)->whereNull('deleted_at');
+        } else {
+            $values = DB::table('configuremacdbots')->select($this->listing_cols)->whereNull('deleted_at')->where('userid', '=', Auth::user()->id);
+        }
         $out = Datatables::of($values)->make();
         $data = $out->getData();
 

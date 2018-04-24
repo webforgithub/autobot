@@ -87,4 +87,8 @@ Route::group(['as' => $as, 'middleware' => ['auth', 'permission:ADMIN_PANEL']], 
     Route::get(config('laraadmin.adminRoute') . '/macd-chart', 'LA\ConfigureMACDBotsController@getMACDChart');
     
     Route::get(config('laraadmin.adminRoute') . '/get-chart/{symbol}', 'LA\ConfigureMACDBotsController@getChart');
+
+	/* ================== Alerts ================== */
+	Route::resource(config('laraadmin.adminRoute') . '/alerts', 'LA\AlertsController');
+	Route::get(config('laraadmin.adminRoute') . '/alert_dt_ajax', 'LA\AlertsController@dtajax');
 });

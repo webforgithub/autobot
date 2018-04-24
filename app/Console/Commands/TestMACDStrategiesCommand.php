@@ -98,6 +98,7 @@ class TestMACDStrategiesCommand extends Command {
                         ->where('configuremacdbot_id', "=", $configurationId)
                         ->where('symbol', "=", $symbol)
                         ->where('side', "=", $orderType)
+                        ->whereDate('created_at', '=', \Carbon\Carbon::today()->toDateString())
                         ->whereNull('deleted_at')
                         ->whereIn('status', ['NEW', ''])
                         ->count();
@@ -107,9 +108,10 @@ class TestMACDStrategiesCommand extends Command {
         $returnType = 'SELL';
         $tmpStatus =  DB::table('order_history')
                         ->where('configuremacdbot_id', "=", $configurationId)
-                        ->where('symbol', "=", $symbol)
-                        ->select("*")
+                        ->where('symbol', "=", $symbol)                        
+                        ->whereDate('created_at', '=', \Carbon\Carbon::today()->toDateString())
                         ->whereNull('deleted_at')
+                        ->select("*")
                         ->orderBy('id', "DESC")
                         ->take(1)
                         ->get();
@@ -205,16 +207,16 @@ class TestMACDStrategiesCommand extends Command {
         }
 
         echo "PRESS 'q' TO QUIT AND CLOSE ALL POSITIONS\n\n\n";
-//        stream_set_blocking(STDIN, 0);
+        stream_set_blocking(STDIN, 0);
 
         $console = new \App\Util\Console();
         $indicators = new Indicators();
 
         while (1) {
-//            if (ord(fgetc(STDIN)) == 113) { // try to catch keypress 'q'
-//                echo "QUIT detected...";
-//                return null;
-//            }
+            if (ord(fgetc(STDIN)) == 113) { // try to catch keypress 'q'
+                echo "QUIT detected...";
+                return null;
+            }
 
             $symbols = DB::table('configuremacdbots')
                     ->select("*")
@@ -223,6 +225,7 @@ class TestMACDStrategiesCommand extends Command {
 
             foreach ($symbols as $instrumentObj) {
                 $userObj = DB::table('users')->select("*")->where('id', "=", $instrumentObj->userid)->get();
+                
                 if (count($userObj) > 0) {
                     $this->output->write("-----------------------  Restarted  -----------------------------", true);
                     $this->output->write("- Symbol " . $instrumentObj->symbol, true);
@@ -277,6 +280,8 @@ class TestMACDStrategiesCommand extends Command {
                             $recentData = $api->candlesticks($instrument, "3m", 200);
                             
                             if (count($recentData) > 0) {
+                                $isBuy = $this->GetLastOrderType($configurationId, $instrument);
+                                
                                 $closeArray = [];
                                 $tmpCloseArray = array_values(array_map(function($sub) {
                                             return ($sub["close"]);
@@ -288,7 +293,7 @@ class TestMACDStrategiesCommand extends Command {
 
                                 $macdData = $indicators->macd($instrument, $closeArray, $instrumentObj->ema_short_period, $instrumentObj->ema_long_period, $instrumentObj->signal_period);
 //                                $macdData = trader_macd($closeArray["close"], $instrumentObj->ema_short_period, $instrumentObj->ema_long_period, $instrumentObj->signal_period);
-//                                dd($macdData);
+                                
                                 /* buy(1)/hold(0)/sell(-1) * */
                                 $arrayMACD = array(-1 => "SELL", 0 => "Hold", 1 => "BUY");
 
@@ -300,23 +305,24 @@ class TestMACDStrategiesCommand extends Command {
                                 $this->info("- Sell Price: " . $sellPrice, true);
                                 $this->info("- Current Price: " . $currentPrice, true);
 
-                                $isBuy = $this->GetLastOrderType($configurationId, $instrument);
+
                                 
-                                if ($macdData == -1) {
-                                    
+                                if ($macdData == -1) {                                    
                                     /** SELL NOW * */
                                     $this->output->write("*-- lastBuyOrder Data. -> " . count($lastBuyOrder), true);
                                     
 //                                    if ($sellQuantity > 0 && count($lastBuyOrder) > 0 && $sellPrice > $lastBuyOrder[0]->price) {
                                     if ($sellQuantity > 0 && $isBuy == 'BUY') {
-                                        $sellPrice = $sellPrice + $this->increasing;
+                                        
                                         $currentPrice = $sellPrice;
-                                        $stopPrice = $currentPrice - (($currentPrice * 2) / 100 );
+                                        $stopPrice = $currentPrice - (($this->decreasing * 5));
                                         $flag = [];
                                         $flag["stopPrice"] = number_format(round((float) $stopPrice, 8), 8, '.', '');
 
                                         $this->info("- SELLING NOW: P: $sellPrice | Q: $sellQuantity | SP: " . $flag["stopPrice"], true);
-                                        $order = $api->sellTest($instrument, $sellQuantity, $currentPrice, "TAKE_PROFIT_LIMIT", $flag);
+//                                        $order = $api->sellTest($instrument, $sellQuantity, $currentPrice, "TAKE_PROFIT_LIMIT", $flag);
+//                                        $order = $api->sell($instrument, $sellQuantity, $currentPrice, "STOP_LOSS_LIMIT", $flag);
+                                        $order = $api->marketSell($instrument, $sellQuantity);
 //                                        $order = $api->sell($instrument, $sellQuantity, $currentPrice);
 
                                         if (!isset($order['code'])) {
@@ -348,23 +354,22 @@ class TestMACDStrategiesCommand extends Command {
                                         $openOrder = 0;
                                     }
                                     
-                                    if ($availableBalance > 0 && $openOrder == 0 && $isBuy == 'SELL') {
-                                        $buyQuantity = $availableBalance / $currentPrice;
-                                        $buyQuantity = number_format(round((float) $buyQuantity, 8), 8, '.', '');
-
+                                    if ($availableBalance > 0 && $openOrder == 0 && $isBuy == 'SELL'  && $buyOrder < $totalOrder) {
                                         $buyPrice = $buyPrice + $this->increasing;
                                         $currentPrice = number_format(round((float) $buyPrice, 8), 8, '.', '');
 
                                         $buyQuantity = number_format(round((float) $this->quantity, 8), 8, '.', '');
-
-                                        $stopPrice = $currentPrice + (($currentPrice * 2) / 100 );
+                                        $stopPrice = $currentPrice + (($this->increasing * 5));
+//                                        $stopPrice = $currentPrice + (($currentPrice * 0.1));
                                         $flag = [];
                                         $flag["stopPrice"] = number_format(round((float) $stopPrice, 8), 8, '.', '');
 
                                         $this->info("- BUYING NOW: P: $currentPrice | Q: $buyQuantity | SP: " . $flag["stopPrice"], true);
 
-                                        $order = $api->buyTest($instrument, $buyQuantity, $currentPrice);
-//                                      $order = $api->buyTest($instrument, $buyQuantity, $currentPrice, "STOP_LOSS_LIMIT", $flag);
+//                                        $order = $api->buyTest($instrument, $buyQuantity, $currentPrice);
+//                                        $order = $api->buyTest($instrument, $buyQuantity, $currentPrice, "STOP_LOSS_LIMIT", $flag);
+//                                      $order = $api->buy($instrument, $buyQuantity, $currentPrice, "STOP_LOSS_LIMIT", $flag);
+                                      $order = $api->marketBuy($instrument, $buyQuantity);
 //                                        $order = $api->buy($instrument, $buyQuantity, $currentPrice);
 
                                         if (!isset($order['code'])) {

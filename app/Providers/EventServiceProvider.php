@@ -25,6 +25,9 @@ class EventServiceProvider extends ServiceProvider
         'App\Events\RunBinanaceTicker' => [
             'App\Listeners\InsertHistoricalData',
         ],
+        'App\Events\SendAlertToUsers' => [
+            'App\Listeners\SendAlertEmail',
+        ],
     ];
 
     /**

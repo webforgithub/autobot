@@ -19,6 +19,8 @@ trait Orders {
     public $buyPrice = 0;
     public $sellPrice = 0;
     public $stepSize = 0;
+    public $minNotional = 0;
+    public $minQty = 0;
 
     public function ValidateOrder($api, $symbol, $amount, $quantity = 0) {
         $valid = true;
@@ -32,7 +34,7 @@ trait Orders {
 
         $minPrice = (float) $filters['PRICE_FILTER']['minPrice'];
         $minQty = (float) $filters['LOT_SIZE']['minQty'];
-        $minNotional = (float) $filters['MIN_NOTIONAL']['minNotional'];
+        $this->minNotional = (float) $filters['MIN_NOTIONAL']['minNotional'];
         $this->quantity = (float) $quantity;
 
         # stepSize defines the intervals that a quantity/icebergQty can be increased/decreased by.
@@ -52,9 +54,9 @@ trait Orders {
 
         # Set static
         # If quantity or amount is zero, minNotional increase 10%
-        $this->quantity = ($minNotional / $orderBook["lastBid"]);
+        $this->quantity = ($this->minNotional / $orderBook["lastBid"]);
         $this->quantity = $this->quantity + ($this->quantity * 10 / 100);
-        $notional = $minNotional;
+        $notional = $this->minNotional;
 
         if ($amount > 0) {
             # Calculate amount to quantity
@@ -86,7 +88,7 @@ trait Orders {
         }
 
         # minNotional = minimum order value (price * quantity)
-        if ($notional < $minNotional) {
+        if ($notional < $this->minNotional) {
             #print('Invalid notional, minNotional: %.8f (u: %.8f)' % (minNotional, notional))
             print('Invalid notional, minNotional: minNotional (u: notional)');
             $valid = false;
@@ -104,7 +106,7 @@ trait Orders {
         $asks = array_keys($orders['asks']);
 
         $lastBid = number_format((float) array_shift($bids), 8, '.', ' ');
-        ; #last buy price (bid)
+        #last buy price (bid)
         $lastAsk = number_format((float) array_shift($asks), 8, '.', ' '); #last sell price (ask)
 
         return array("lastBid" => $lastBid, "lastAsk" => $lastAsk);

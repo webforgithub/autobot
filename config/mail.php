@@ -107,7 +107,7 @@ return [
     |
     */
 
-    //'sendmail' => '/usr/sbin/sendmail -bs',
-    'sendmail' => 'E:/wamp/bin/sendmail.exe  -t -i',
+    'sendmail' => '/usr/sbin/sendmail -bs',
+//    'sendmail' => 'E:/wamp/bin/sendmail.exe  -t -i',
 
 ];

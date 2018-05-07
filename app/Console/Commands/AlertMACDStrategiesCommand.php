@@ -209,7 +209,9 @@ class AlertMACDStrategiesCommand extends Command {
                                 $minutes = (time() - strtotime($lastTradeTime)) / 60;                                
                             }
 
+                            /** https://simplecrypt.co/strategy.html **/
                             $macdData = $indicators->macd($instrument, $closeArray, $instrumentObj->ema_short_period, $instrumentObj->ema_long_period, $instrumentObj->signal_period);
+                            //$macdData = $indicators->macd($instrument, $closeArray, 120, 260, 90);
 
                             /* buy(1)/hold(0)/sell(-1) * */
                             $arrayMACD = array(-1 => "SELL", 0 => "Hold", 1 => "BUY");

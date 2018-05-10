@@ -5,6 +5,8 @@
         <group>
             <file>file:/E:/wamp/www/crypto-trading/crypto-trading/app/Http/Controllers/ChartController.php</file>
             <file>file:/E:/wamp/www/crypto-trading/crypto-trading/resources/views/chart.blade.php</file>
+            <file>file:/E:/wamp/www/crypto-trading/crypto-trading/resources/views/la/configuremacdbots/macdchart.blade.php</file>
+            <file>file:/E:/wamp/www/crypto-trading/crypto-trading/public/la-assets/js/utils.js</file>
         </group>
     </open-files>
 </project-private>

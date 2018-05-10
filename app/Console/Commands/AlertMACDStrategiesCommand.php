@@ -182,16 +182,16 @@ class AlertMACDStrategiesCommand extends Command {
             $this->info("Running the DEMO test of all the strategies:");
         }
 
-        echo "PRESS 'q' TO QUIT AND CLOSE ALL POSITIONS\n\n\n";
-        stream_set_blocking(STDIN, 0);
+//        echo "PRESS 'q' TO QUIT AND CLOSE ALL POSITIONS\n\n\n";
+//        stream_set_blocking(STDIN, 0);
 
         while (1) {
 
-            if (ord(fgetc(STDIN)) == 113) {
-                /*  try to catch keypress 'q'  */
-                echo "QUIT detected...";
-                return null;
-            }
+//            if (ord(fgetc(STDIN)) == 113) {
+//                /*  try to catch keypress 'q'  */
+//                echo "QUIT detected...";
+//                return null;
+//            }
 
             $symbols = DB::table('configuremacdbots')
                     ->select("*")
@@ -204,7 +204,7 @@ class AlertMACDStrategiesCommand extends Command {
                 $userObj = DB::table('users')->select("*")->where('id', "=", $instrumentObj->userid)->get();
 
                 if (count($userObj) > 0) {
-                    $this->output->write("- USER ID :: " . $instrumentObj->userid, true);
+                    $this->output->write("************************************ USER ID :: " . $instrumentObj->userid, true);
                     $this->output->write("- COIN PAIR " . $instrumentObj->symbol, true);
 
                     $userObj = $userObj[0];
@@ -271,30 +271,33 @@ class AlertMACDStrategiesCommand extends Command {
                             $signal = Average::exponentialMovingAverage($macd, $instrumentObj->signal_period);
                             $hist = $this->subtractTwoArray($macd, $signal);
                             $loopIndex = count($macd);
-
+                            $macdSignal = array(0);
+                            
                             if ($loopIndex > 0) {
-                                for ($index = $loopIndex - 1; $index < $loopIndex; $index++) {
+                                for ($index = 1; $index < $loopIndex; $index++) {
                                     if ($macd[$index] > $signal[$index] && $macd[$index - 1] <= $signal[$index - 1]) {
-                                        /* If the MACD crosses the signal line upward  */
+                                        /* If the MACD crosses the signal line upward */
                                         $macdData = 1;
-                                        $this->output->write("----------------------------------------------------- BUY <*****<", true);
+                                        $macdSignal[] = 1; /** BUY **/
                                     } else if ($macd[$index] < $signal[$index] && $macd[$index - 1] >= $signal[$index - 1]) {
-                                        /* The other way around */
+                                        /* The other way around */                                        
                                         $macdData = -1;
-                                        $this->output->write("----------------------------------------------------- SELL >*****>", true);
+                                        $macdSignal[] = -1;  /** SELL **/
                                     } else {
                                         /* Do nothing if not crossed */
                                         $macdData = 0;
-                                        $this->output->write("----------------------------------------------------- HOLD >----->", true);
+                                        $macdSignal[] = 0;  /** HOLD **/
                                     }
                                 }
-                            }
+                            }                            
+                            
+                            $macdData = array_pop($macdSignal);
                             
                             /* BUY(1)/ HOLD(0) / SELL(-1) * */
                             $arrayMACD = array(-1 => "SELL", 0 => "Hold", 1 => "BUY");
-
-                            $this->output->write("- MACD ALERT TYPE: " . $arrayMACD[$macdData], true);
+                            
                             $this->output->write("- LAST TRANSACTION: " . $lastOrderType, true);
+                            $this->output->write("----------> MACD ALERT TYPE: " . $arrayMACD[$macdData], true);
 
                             $sendNotification = false;
                             $tmpAlert = array();

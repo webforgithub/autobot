@@ -51,7 +51,8 @@
         <script src="//cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.bundle.min.js"></script>
         <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.13.0/moment.min.js"></script>
         <script src="{{ asset('la-assets/js/utils.js') }}"></script>
-        <script>
+        <script>          
+            
         var fnGenerateChart = function () {
             $.getJSON("{{ url('/get-chart') }}/" + $("#symbol option:selected").val(), function (data) {
                 // split the data set into ohlc and volume
@@ -82,14 +83,17 @@
 
                 var calMin = parseFloat(Math.min.apply(Math, minArray));
                 var calMax = parseFloat(Math.max.apply(Math, maxArray));
-
+                
+                const colours = hist.map((value) => value < 0 ? window.chartColors.red : window.chartColors.green);
+                
                 var config = {
-                    type: 'line',
+                    type: 'bar',
                     data: {
                         labels: dateTime,
                         fill: false,
                         datasets: [
                             {
+                                type: 'line',
                                 label: 'MACD',
                                 backgroundColor: window.chartColors.blue,
                                 borderColor: window.chartColors.blue,
@@ -101,6 +105,7 @@
                                 radius: 0
                             },
                             {
+                                type: 'line',                                
                                 label: 'MACDS',
                                 backgroundColor: window.chartColors.red,
                                 borderColor: window.chartColors.red,
@@ -113,11 +118,13 @@
                             },
                             {
                                 label: 'MACDH',
-                                backgroundColor: window.chartColors.green,
-                                borderColor: window.chartColors.green,
+//                                backgroundColor: window.chartColors.green,
+//                                borderColor: window.chartColors.green,
+                                backgroundColor: colours,
+                                borderColor: colours,
                                 borderWidth: 1,
                                 data: hist,
-                                fill: false,
+                                fill: true,
                                 lineTension: 0, 
                                 cubicInterpolationMode: 'default', 
                                 radius: 0

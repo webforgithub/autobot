@@ -30,7 +30,12 @@
     <div class="box-body">
         <div class="row">
             <div class="col-md-12">
-                <div id="container" style="height: 600px; min-width: 310px"></div>
+                <canvas id="containerOHLC"></canvas>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <canvas id="container"></canvas>
             </div>
         </div>
     </div>
@@ -38,187 +43,236 @@
 @endsection
 
 @push('scripts')
+<script src="//cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.bundle.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.13.0/moment.min.js"></script>
+<script src="{{ asset('la-assets/js/utils.js') }}"></script>
+<script>          
 
-<!--<script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>-->
-<script src="//code.highcharts.com/stock/highstock.js"></script>
-<script src="//code.highcharts.com/stock/modules/drag-panes.js"></script>
-<script src="//code.highcharts.com/stock/modules/exporting.js"></script>
-<script src="//code.highcharts.com/stock/indicators/indicators.js"></script>
-<script src="//code.highcharts.com/stock/indicators/pivot-points.js"></script>
-<script src="//code.highcharts.com/stock/indicators/macd.js"></script>
-
-
-<script>
 var fnGenerateChart = function () {
-    $.getJSON("{{ url(config('laraadmin.adminRoute') . '/get-chart') }}/" + $("#symbol option:selected").val(), function (data) {
+    $.getJSON("{{ url('/get-chart') }}/" + $("#symbol option:selected").val(), function (data) {
         // split the data set into ohlc and volume
-        var ohlc = [],
-                volume = [],
-                dataLength = data.totalMACDPoints,
-                /* set the allowed units for data grouping  */
-                groupingUnits = [['week',[1]], ['month',[1, 2, 3, 4, 6]]],
-                i = 0;
+        var openDS = [],
+            highDS = [],
+            lowDS = [],
+            closeDS = [],
+            dateTime = [],
+            macd = [];
+            signal = [];
+            hist = [];
+            macd1 = signal1 = hist1 = [];
 
-        $.each(data.recentData, function(key, item) {
-            ohlc.push([
-                //data.recentData[key]["timestamp"], /* the date  */
-                (data.recentData[key]["timestamp"] + (3.5 * 3600)),
-                data.recentData[key]["open"],     /* open  */
-                data.recentData[key]["high"],     /* high  */
-                data.recentData[key]["low"],      /* low   */
-                data.recentData[key]["close"]     /* close */
-            ]);
-        });
-        /*
-        raw = line = hist = [];
-        for (i; i < data.totalMACDPoints; i += 1) {
-            raw.push(data.macdData[0][i]);
-            line.push(data.macdData[1][i]);
-            hist.push(data.macdData[2][i]);
-        }        
-        if (data.totalMACDPoints > 0) {
-            volume[0] = {
-                name: "MACD Raw",
-                data: raw
-            };
-            volume[1] = {
-                name: "MACD Line",
-                data: line
-            };
-            volume[3] = {
-                name: "MACD Histrogram",
-                data: hist
-            };
-        }
-        */
+        $.each(data.recentData, function (key, item) {
+            dateTime.push(data.recentData[key]["keyTime"]);
+            openDS.push(parseFloat(data.recentData[key]["open"] * 100000).toFixed(6));
+            highDS.push(parseFloat(data.recentData[key]["high"] * 100000).toFixed(6));
+            lowDS.push(parseFloat(data.recentData[key]["low"] * 100000).toFixed(6));
+            closeDS.push(parseFloat(data.recentData[key]["close"] * 100000).toFixed(6));
 
-        // create the chart
-        Highcharts.stockChart('container', {
-            rangeSelector: {
-                buttons: [{
-                    type: 'minute',
-                    count: 1,
-                    text: '1m'
-                }, {
-                    type: 'minute',
-                    count: 5,
-                    text: '5m'
-                }, {
-                    type: 'minute',
-                    count: 10,
-                    text: '10m'
-                }, {
-                    type: 'minute',
-                    count: 15,
-                    text: '15m'
-                }, {
-                    type: 'hour',
-                    count: 1,
-                    text: '1h'
-                }, {
-                    type: 'hour',
-                    count: 2,
-                    text: '2h'
-                }, {
-                    type: 'hour',
-                    count: 4,
-                    text: '4h'
-                },{
-                    type: 'hour',
-                    count: 12,
-                    text: '12h'
-                },{
-                    type: 'day',
-                    count: 1,
-                    text: '1d'
-                }],
-                selected: 4
-            },            
-            title: {
-                text: data.symbol
-            },
-            subtitle: {
-                text: 'With MACD and Pivot Points technical indicators'
-            },
-            yAxis: [{
-                    labels: {
-                        align: 'right',
-                        x: -3
-                    },
-                    title: {
-                        text: 'OHLC'
-                    },
-                    height: '50%',
-                    lineWidth: 2,
-                    resize: {
-                        enabled: true
-                    }
-                }, {
-                    top: '75%',
-                    height: '25%',
-                    labels: {
-                        align: 'right',
-                        x: -3
-                    },
-                    offset: 0,
-                    title: {
-                        text: 'MACD'
-                    }
-                }],
-            tooltip: {
-                split: true
-            },
-            navigator: {
-                enabled: false
-            },
-            series: [{
-                type: 'ohlc',
-                id: 'candlestickSymbol',
-                name: data.symbol,
-                data: ohlc,
-                zIndex: 1
-            }, {
-                type: 'pivotpoints',
-                linkedTo: 'candlestickSymbol',
-                zIndex: 0,
-                lineWidth: 1,
-                dataLabels: {
-                    overflow: 'none',
-                    crop: false,
-                    y: 4,
-                    style: {
-                        fontSize: 9
-                    }
-                }
-            }, {
-                type: 'macd',
-                yAxis: 1,
-                linkedTo: 'candlestickSymbol',
-                color:'blue',
-                gapSize:3,
-                macdLine: {
-                    styles: {
-                        lineColor:'green',
-                        lineWidth:1,
-                    }
-                },
-                signalLine:{
-                    styles: {
-                        lineColor:'red',
-                        lineWidth:1,
-                    }
-                },
-                params: {
-                    shortPeriod: 12,
-                    longPeriod: 26,
-                    signalPeriod: 9,
-                    period: 26
-                }
-            }]
+            macd.push(parseFloat(data.recentData[key]["macd"] * 100000).toFixed(6));
+            signal.push(parseFloat(data.recentData[key]["macds"] * 100000).toFixed(6));
+            hist.push(parseFloat(data.recentData[key]["macdh"] * 100000).toFixed(6));
         });
 
+        var minArray = [Math.min.apply(Math, macd), Math.min.apply(Math, signal), Math.min.apply(Math, hist)];
+        var maxArray = [Math.max.apply(Math, macd), Math.max.apply(Math, signal), Math.max.apply(Math, hist)];
+
+        var calMin = parseFloat(Math.min.apply(Math, minArray));
+        var calMax = parseFloat(Math.max.apply(Math, maxArray));
+
+        const colours = hist.map((value) => value < 0 ? window.chartColors.red : window.chartColors.green);
+
+        var config = {
+            type: 'bar',
+            data: {
+                labels: dateTime,
+                fill: false,
+                datasets: [
+                    {
+                        type: 'line',
+                        label: 'MACD',
+                        backgroundColor: window.chartColors.blue,
+                        borderColor: window.chartColors.blue,
+                        borderWidth: 1,
+                        data: macd,
+                        fill: false,
+                        lineTension: 0, 
+                        cubicInterpolationMode: 'default', 
+                        radius: 0
+                    },
+                    {
+                        type: 'line',                                
+                        label: 'MACDS',
+                        backgroundColor: window.chartColors.red,
+                        borderColor: window.chartColors.red,
+                        borderWidth: 1,
+                        data: signal,
+                        fill: false,
+                        lineTension: 0, 
+                        cubicInterpolationMode: 'default', 
+                        radius: 0
+                    },
+                    {
+                        label: 'MACDH',
+                        backgroundColor: colours,
+                        borderColor: colours,
+                        borderWidth: 1,
+                        data: hist,
+                        fill: true,
+                        lineTension: 0, 
+                        cubicInterpolationMode: 'default', 
+                        radius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                title: {
+                    display: true,
+                    text: 'Price Chart'
+                },
+                tooltips: {
+                    mode: 'index',
+                    intersect: false
+                },
+                hover: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                scales: {
+                    xAxes: [{
+                            display: true,
+                            beginAtZero: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Date/Time'
+                            }
+                        }],
+                    yAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'MACD'
+                            },
+                            ticks: {
+                                min: calMin,
+                                max: calMax,
+                                beginAtZero: true,
+                                userCallback: function (label, index, labels) {
+                                    return parseFloat(label).toFixed(6);
+                                }
+                            }
+                        }]
+                }
+            }
+        };
+
+        var ctx = document.getElementById('container').getContext('2d');
+        window.myLine = new Chart(ctx, config);
+
+        minArray = [Math.min.apply(Math, openDS), Math.min.apply(Math, highDS), Math.min.apply(Math, lowDS), Math.min.apply(Math, closeDS)];
+        maxArray = [Math.max.apply(Math, openDS), Math.max.apply(Math, highDS), Math.max.apply(Math, lowDS), Math.max.apply(Math, closeDS)];
+
+        calMin = parseFloat(Math.min.apply(Math, minArray));
+        calMax = parseFloat(Math.max.apply(Math, maxArray));
+
+        var configOHLC = {
+            type: 'line',
+            data: {
+                labels: dateTime,
+                datasets: [{
+                        label: 'Open',
+                        backgroundColor: window.chartColors.green,
+                        borderColor: window.chartColors.green,
+                        data: openDS,
+                        fill: false,
+                        lineTension: 0, 
+                        cubicInterpolationMode: 'default', 
+                        radius: 0,
+                        borderWidth: 1,
+                    },
+                    {
+                        label: 'Close',
+                        backgroundColor: window.chartColors.red,
+                        borderColor: window.chartColors.red,
+                        data: closeDS,
+                        fill: false,
+                        lineTension: 0, 
+                        cubicInterpolationMode: 'default', 
+                        radius: 0,
+                        borderWidth: 1,
+                    },
+                    {
+                        label: 'High',
+                        backgroundColor: window.chartColors.blue,
+                        borderColor: window.chartColors.blue,
+                        data: highDS,
+                        fill: false,
+                        lineTension: 0, 
+                        cubicInterpolationMode: 'default', 
+                        radius: 0,
+                        borderWidth: 1,
+                    },
+                    {
+                        label: 'Low',
+                        backgroundColor: window.chartColors.purple,
+                        borderColor: window.chartColors.purple,
+                        data: lowDS,
+                        fill: false,
+                        lineTension: 0, 
+                        cubicInterpolationMode: 'default', 
+                        radius: 0,
+                        borderWidth: 1,
+                    }] 
+            },
+            options: {
+                responsive: true,
+                title: {
+                    display: true,
+                    text: 'OHLC'
+                },
+                tooltips: {
+                    mode: 'index',
+                    intersect: false
+                },
+                hover: {
+                    mode: 'nearest',
+                    intersect: true
+                },
+                scales: {
+                    xAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Date/Time'
+                            },
+                            tickFormat: function (d) {
+                                return new Date(d);
+                            },
+                            showMaxMin: false
+                        }],
+                    yAxes: [{
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'MACD'
+                            },
+                            ticks: {
+                                min: calMin,
+                                max: calMax,
+                                beginAtZero: true,
+                                userCallback: function (label, index, labels) {
+                                    return parseFloat(label).toFixed(6);
+                                }
+                            }
+                        }]
+                }
+            }
+        };
+        var ctxOHLC = document.getElementById('containerOHLC').getContext('2d');
+        window.myLine = new Chart(ctxOHLC, configOHLC);
     });
-}
+};
+
 $(function () {
     $('#symbol').on('change', function (e) {
         fnGenerateChart();

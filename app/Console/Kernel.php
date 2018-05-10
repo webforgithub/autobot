@@ -16,6 +16,7 @@ use App\Console\Commands\TestMACDStrategiesCommand;
 use App\Console\Commands\CheckBalanceCommand;
 use App\Console\Commands\CheckOrderStatusCommand;
 use App\Console\Commands\AlertMACDStrategiesCommand;
+use App\Console\Commands\MACDStrategiesCommand;
 
 class Kernel extends ConsoleKernel {
 
@@ -37,7 +38,8 @@ class Kernel extends ConsoleKernel {
 //        TestMACDStrategiesCommand::class,
         CheckBalanceCommand::class,
         CheckOrderStatusCommand::class,
-        AlertMACDStrategiesCommand::class
+        AlertMACDStrategiesCommand::class,
+        MACDStrategiesCommand::class
     ];
 
     /**

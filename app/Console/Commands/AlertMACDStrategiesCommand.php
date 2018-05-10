@@ -11,13 +11,16 @@ use Illuminate\Support\Facades\DB;
 use Symfony\Component\Console\Input\InputArgument;
 use App\Traits\Orders;
 use App\Models\Alert;
+use MathPHP\Statistics\Average;
 
 /**
  * Class ExampleCommand
  * @package App\Console\Commands
  *
- *          SEE COMMENTS AT THE BOTTOM TO SEE WHERE TO ADD YOUR OWN
- *          CONDITIONS FOR A TEST.
+ * AlertMACDStrategiesCommand will calculate the BUY/SELL/HOLD advise. It's depends on MACD algorithm.
+ * 
+ * We have used EMA (Exponential Moving Average) and than calculate the MACD. To calculate Exponential Moving Average we have used MathPHP libs.
+ * Previously we have used PHP Trader extension but it was not working perfectly and giving wrong result.
  *
  */
 class AlertMACDStrategiesCommand extends Command {
@@ -118,14 +121,59 @@ class AlertMACDStrategiesCommand extends Command {
         return $returnType;
     }
 
-    /** -------------------------------------------------------------------
+    protected function subtractTwoArray($ema_fast, $ema_slow) {
+        $ret = array();
+        foreach ($ema_fast as $key => $value) {
+            $ret[$key] = number_format($ema_fast[$key] - $ema_slow[$key], 10);
+        }
+        return $ret;
+    }
+
+    /**
+     * 
      * @return null
-     *
-     *  this is the part of the command that executes.
-     *  -------------------------------------------------------------------
+     * 
+     * This command run as Cron job with cron tab. 
+     * 
+     * How it works ?
+     * 
+     * @Step 1: Get all coin list which is setup by user's of the system. Each coin is associated with user account and Binance API Key.
+     * 
+     * @Step 2: Fetch the User and Binance API Key.
+     * 
+     * @Step 3: Fetch current coin market price and store it for further use.
+     * @Step 3.1: Fetch current coin Ticker prices and store it.
+     * @Step 3.2: Fetch current coin Order book and find Last Bid and Ask price.
+     * 
+     * @Step 4: Fetch current coin Candle Stick for 3 minutes interval.
+     * 
+     * @Step 5: Fetch current coin last order detail. This will helps to avoid duplication of the order. 
+     *          Mean if we have already place BUY order than we have to place SELL order for selected coin.
+     * 
+     * @Step 6: Now calculate the MACD with the help of Exponential Moving Average. It is 3 steps process.
+     * 
+     * @Step 6.1: 1st Calculate the Fast and Slow moving average. Then deducate SLOW from FAST moving average and store it in MACD variable
+     *              FAST - SLOW => MACD 
+     * 
+     * @Step 6.2: 2nd Calculate MACD Signal moving average for MACD variable, which is we stored in previous step
+     *               Exponential Moving Average ( MACD ) => SIGNAL 
+     * 
+     * @Step 6.3: 3rd Calculate LINE CROSSING for MACD. 
+     *            IF (MACD[CURRENT INDEX] > SIGNAL[CURRENT INDEX] AND MACD[CURRENT INDEX - 1] <= SIGNAL[CURRENT INDEX - 1]) {
+     *                  BUY -> SIGNALE
+     *            ELSE IF (MACD[CURRENT INDEX] < SIGNAL[CURRENT INDEX] AND MACD[CURRENT INDEX - 1] >= SIGNAL[CURRENT INDEX - 1]) {
+     *                  SELL -> SIGNALE
+     *            ELSE
+     *                  HOLD -> SIGNALE
+     * 
+     * @Step 7: Once we have BUY/SELL/HOLD signal, than we can process the coin NOTIFICATION email with current price type of transaction.
+     * 
+     * @Step 8: Restart the step 1 for other. LOOP.
+     * 
      */
     public function handle() {
-        @ini_set('trader.real_precision', '8');
+        @ini_set('precision', '10');
+        @ini_set('trader.real_precision', '10');
         @date_default_timezone_set('Europe/Amsterdam');
 
         $rundemo = false;
@@ -137,10 +185,8 @@ class AlertMACDStrategiesCommand extends Command {
         echo "PRESS 'q' TO QUIT AND CLOSE ALL POSITIONS\n\n\n";
         stream_set_blocking(STDIN, 0);
 
-        $console = new \App\Util\Console();
-        $indicators = new Indicators();
-
         while (1) {
+
             if (ord(fgetc(STDIN)) == 113) {
                 /*  try to catch keypress 'q'  */
                 echo "QUIT detected...";
@@ -152,14 +198,14 @@ class AlertMACDStrategiesCommand extends Command {
                     ->whereNull('deleted_at')
                     ->get();
 
+            $this->output->write("-----------------------  ALERT LOOP IS STARTED  -----------------------------", true);
+            
             foreach ($symbols as $instrumentObj) {
                 $userObj = DB::table('users')->select("*")->where('id', "=", $instrumentObj->userid)->get();
 
                 if (count($userObj) > 0) {
-                    $this->output->write("-----------------------  Restarted  -----------------------------", true);
                     $this->output->write("- USER ID :: " . $instrumentObj->userid, true);
                     $this->output->write("- COIN PAIR " . $instrumentObj->symbol, true);
-                    
 
                     $userObj = $userObj[0];
                     $binanceKey = $this->GetAPIKey($instrumentObj->userid);
@@ -203,17 +249,48 @@ class AlertMACDStrategiesCommand extends Command {
                             $lastOrderType = 'BUYSELL';
                             $this->defaultWaitTime = 0;
                             $minutes = 0;
+                            
                             if (count($lastBuySellOrder) > 0) {
                                 $lastTradeTime = $lastBuySellOrder[0]->alert_time;
                                 $lastOrderType = $lastBuySellOrder[0]->alert_type;
-                                $minutes = (time() - strtotime($lastTradeTime)) / 60;                                
+                                $minutes = (time() - strtotime($lastTradeTime)) / 60;
                             }
+                            
+                            /** https://simplecrypt.co/strategy.html * */
+                            //$macdData = $indicators->macd($instrument, $closeArray, $instrumentObj->ema_short_period, $instrumentObj->ema_long_period, $instrumentObj->signal_period);
 
-                            /** https://simplecrypt.co/strategy.html **/
-                            $macdData = $indicators->macd($instrument, $closeArray, $instrumentObj->ema_short_period, $instrumentObj->ema_long_period, $instrumentObj->signal_period);
-                            //$macdData = $indicators->macd($instrument, $closeArray, 120, 260, 90);
+                            $macdData = 0;
+                            $ema_fast = Average::exponentialMovingAverage($closeArray["close"], $instrumentObj->ema_short_period);
+                            $ema_slow = Average::exponentialMovingAverage($closeArray["close"], $instrumentObj->ema_long_period);
+                            $macd = array();
+                            $signal = array();
+                            $hist = array();
+                            
+                            $macd = $this->subtractTwoArray($ema_fast, $ema_slow);
+                            
+                            $signal = Average::exponentialMovingAverage($macd, $instrumentObj->signal_period);
+                            $hist = $this->subtractTwoArray($macd, $signal);
+                            $loopIndex = count($macd);
 
-                            /* buy(1)/hold(0)/sell(-1) * */
+                            if ($loopIndex > 0) {
+                                for ($index = $loopIndex - 1; $index < $loopIndex; $index++) {
+                                    if ($macd[$index] > $signal[$index] && $macd[$index - 1] <= $signal[$index - 1]) {
+                                        /* If the MACD crosses the signal line upward  */
+                                        $macdData = 1;
+                                        $this->output->write("----------------------------------------------------- BUY <*****<", true);
+                                    } else if ($macd[$index] < $signal[$index] && $macd[$index - 1] >= $signal[$index - 1]) {
+                                        /* The other way around */
+                                        $macdData = -1;
+                                        $this->output->write("----------------------------------------------------- SELL >*****>", true);
+                                    } else {
+                                        /* Do nothing if not crossed */
+                                        $macdData = 0;
+                                        $this->output->write("----------------------------------------------------- HOLD >----->", true);
+                                    }
+                                }
+                            }
+                            
+                            /* BUY(1)/ HOLD(0) / SELL(-1) * */
                             $arrayMACD = array(-1 => "SELL", 0 => "Hold", 1 => "BUY");
 
                             $this->output->write("- MACD ALERT TYPE: " . $arrayMACD[$macdData], true);
@@ -225,7 +302,7 @@ class AlertMACDStrategiesCommand extends Command {
                             if ($macdData == -1) {
                                 if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
                                     $sendNotification = true;
-                                    
+
                                     $tmpAlert["alert_type"] = "SELL";
                                     $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
                                     $tmpAlert["currency_name"] = $instrument;
@@ -234,10 +311,10 @@ class AlertMACDStrategiesCommand extends Command {
                                     $tmpAlert["configuremacdbot_id"] = $configurationId;
                                 }
                             } else if ($macdData == 1) {
-                                
+
                                 if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
                                     $sendNotification = true;
-                                    
+
                                     $tmpAlert["alert_type"] = "BUY";
                                     $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
                                     $tmpAlert["currency_name"] = $instrument;
@@ -250,7 +327,7 @@ class AlertMACDStrategiesCommand extends Command {
                             $tmpCount = count($tmpAlert);
                             if ($sendNotification === true && $tmpCount > 0) {
                                 $this->output->write("- TIME DIFFERENT BETWEEN ORDER: " . $minutes, true);
-                                
+
                                 Alert::create($tmpAlert);
 
                                 $order["type"] = $tmpAlert["alert_type"];
@@ -263,20 +340,22 @@ class AlertMACDStrategiesCommand extends Command {
 
                                 if ($instrumentObj->alert_email != "") {
                                     $orderObj = array('orderObject' => $order, 'instrumentPair');
-                                    
+
                                     $email = $instrumentObj->alert_email;
                                     $alertType = $order["alert_type"];
 
                                     $this->output->write("- EMAIL: " . $email, true);
 
                                     $isSent = \Mail::send('emails.tradealertnew', ['data' => $orderObj], function ($m) use ($alertType, $email, $instrument) {
-                                        $m->from('no-reply@autobot.com', 'CryptoBee Trader');
-                                        $m->cc('parmaramit1111@gmail.com', 'Amit');
-                                        $m->cc('scalableapplication@gmail.com', 'Arpit');
-                                        $subject = 'CryptoBee Trader: ['.$alertType.'] alert for ' . $instrument;
-                                        $m->to($email)->subject($subject);
-                                    });
-                                    
+                                                $m->from('no-reply@autobot.com', 'CryptoBee Trader');
+                                                $m->cc('parmaramit1111@gmail.com', 'Amit P');
+                                                $m->cc('scalableapplication@gmail.com', 'Arpit H');
+
+                                                $subject = 'CryptoBee Trader: [' . $alertType . '] alert for ' . $instrument;
+
+                                                $m->to($email)->subject($subject);
+                                            });
+
                                     $this->output->write("- IS SENT?: " . $isSent, true);
                                 }
                             }

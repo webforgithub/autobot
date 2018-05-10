@@ -15,6 +15,9 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('chart', 'ChartController@index');
+Route::get('get-chart/{symbol}', 'ChartController@getChart');
+
 /* ================== Homepage + Admin Routes ================== */
 
 require __DIR__.'/admin_routes.php';

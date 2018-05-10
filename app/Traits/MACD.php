@@ -24,7 +24,7 @@ class MACD {
         $macd_array = array();
 
         //loop data
-        foreach ($data as $key => $row) {
+        foreach ($data['close'] as $key => $row) {
 
             //ema 1
             if ($key >= $ema1) {
@@ -33,7 +33,7 @@ class MACD {
                 if (!isset($previous_EMA1)) {
                     $sum = 0;
                     for ($i = $key - ($ema1 - 1); $i <= $key; $i ++)
-                        $sum += $data[$i]['close'];
+                        $sum += $data['close'][$i];
                     //calc sma
                     $sma = $sum / $ema1;
 
@@ -42,7 +42,7 @@ class MACD {
                     $ema1_value = $sma;
                 } else {
                     //ema formula
-                    $ema = ($data[$key]['close'] - $previous_EMA1) * $smoothing_constant_1 + $previous_EMA1;
+                    $ema = ($data['close'][$key] - $previous_EMA1) * $smoothing_constant_1 + $previous_EMA1;
 
                     //save
                     $previous_EMA1 = $ema;
@@ -57,7 +57,7 @@ class MACD {
                 if (!isset($previous_EMA2)) {
                     $sum = 0;
                     for ($i = $key - ($ema2 - 1); $i <= $key; $i ++)
-                        $sum += $data[$i]['close'];
+                        $sum += $data['close'][$i];
                     //calc sma
                     $sma = $sum / $ema2;
 
@@ -66,7 +66,7 @@ class MACD {
                     $ema2_value = $sma;
                 } else {
                     //ema formula
-                    $ema = ($data[$key]['close'] - $previous_EMA2) * $smoothing_constant_2 + $previous_EMA2;
+                    $ema = ($data['close'][$key] - $previous_EMA2) * $smoothing_constant_2 + $previous_EMA2;
 
                     //save
                     $previous_EMA2 = $ema;
@@ -87,7 +87,7 @@ class MACD {
                     array_pop($macd_array);
 
                 //save
-                $data[$key]['val'] = $macd_line;
+                $data['val'][$key] = $macd_line;
             }
 
             //have enough data to calc signal sma
@@ -102,7 +102,7 @@ class MACD {
                 $sma = $sum / $signal;
 
                 //save
-                $data[$key]['val2'] = $sma;
+                $data['val2'][$key] = $sma;
             }
         }
         return $data;

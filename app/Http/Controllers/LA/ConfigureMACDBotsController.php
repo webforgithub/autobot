@@ -328,7 +328,7 @@ class ConfigureMACDBotsController extends Controller {
         ]);
     }
 
-    public function getChart($symbol) {
+    public function getChart_OLD($symbol) {
         //$myRecentData = $this->getRecentData($symbol);
         $api = new \Binance\API($this->APIKey, $this->ScreateKey);
         //$myRecentData = $api->candlesticks($symbol, "5m", 196, time());
@@ -352,7 +352,7 @@ class ConfigureMACDBotsController extends Controller {
             $totalMACDPoints = count($macdData[0]);
 
             return response()->json([
-                        'symbol' => $symbol,
+                        'symbol' => $symbol . "TEX",
                         'macdData' => $macdData,
                         'totalrecentData' => count($myRecentData),
                         'recentData' => $myRecentData,
@@ -360,7 +360,7 @@ class ConfigureMACDBotsController extends Controller {
                     ])->setEncodingOptions(JSON_NUMERIC_CHECK);
         } else {
             return response()->json([
-                        'symbol' => $symbol,
+                        'symbol' => $symbol. "TEX",
                         'totalrecentData' => 0,
                         'macdData' => array(),
                         'recentData' => array(),
@@ -369,4 +369,100 @@ class ConfigureMACDBotsController extends Controller {
         }
     }
 
+    /**
+     * Get the MACD Chart based in user selection and MACD settings
+     * 
+     * @param type $symbol
+     * @return type
+     */
+    public function getChart($symbol) {
+        $api = new \Binance\API($this->APIKey, $this->ScreateKey);
+
+        /**
+         * https://cryptobee.itbutton.com/data_import/binance/IOTABTC 
+         * http://jsonviewer.stack.hu/#http://cryptobee.itbutton.com/data_import/binance/IOTABTC
+         *
+         ***/
+        $myRecentData = $api->candlesticks(strtoupper($symbol), "3m");
+        $totalRecentData = count($myRecentData);
+        
+        if ($totalRecentData > 0) {
+            $ema_short_period = 12;
+            $ema_long_period = 26;
+            $signal_period = 9;
+            
+            if( Auth::check()) {
+                $symbols = DB::table('configuremacdbots')->select("*")
+                        ->where('userid', '=', Auth::user()->id)
+                        ->where('symbol', '=', $symbol)
+                        ->whereNull('deleted_at')
+                        ->get();
+                if(count($symbols) > 0) {
+                    $ema_short_period = $symbols[0]->ema_short_period;
+                    $ema_long_period = $symbols[0]->ema_long_period;
+                    $signal_period = $symbols[0]->signal_period;
+                }
+            }
+            
+            
+            array_walk($myRecentData, function(&$item, $key) {
+                $timeZoneOffSet = 3.30 * 3600;
+                $item["closeTimeL"] = $item["closeTime"];
+                $item["openTimeL"] = $item["openTime"];
+                $item["closeTime"] = date("Y-m-d H:i:s", (($item["closeTime"] + $timeZoneOffSet) / 1000));
+                $item["openTime"] = date("Y-m-d H:i:s", (($item["openTime"] + $timeZoneOffSet) / 1000));
+                $item["keyTime"] = date("Y-m-d", (($key + $timeZoneOffSet) / 1000));
+                $item["timestamp"] = ($key);
+            });
+
+            $closeArray = array_values(array_map(function($sub) {
+                        return $sub['close'];
+                    }, $myRecentData));
+                    
+            $macdData = [];
+            $ema_fast = Average::exponentialMovingAverage($closeArray, $ema_short_period); /** 12 **/
+            $ema_slow = Average::exponentialMovingAverage($closeArray, $ema_long_period); /** 26 **/
+            $macd = $signal = $hist = array();
+            
+            $macd = $this->subtractTwoArray($ema_fast, $ema_slow);
+            $signal = Average::exponentialMovingAverage($macd, $signal_period);       /** 9 **/
+            $hist = $this->subtractTwoArray($macd, $signal);
+            
+            $keys = array_keys($myRecentData);
+            
+            for($i = 0; $i < $totalRecentData; $i++) {
+                $myRecentData[$keys[$i]]['macd'] = number_format($macd[$i] * 1, 10);
+                $myRecentData[$keys[$i]]['macds'] = number_format($signal[$i] * 1, 10);
+                $myRecentData[$keys[$i]]['macdh'] = number_format($hist[$i] * 1, 10);
+                
+                if ($macd[$i] > $signal[$i] && $macd[$i - 1] <= $signal[$i - 1]) {
+                    /* If the MACD crosses the signal line upward  */
+                    $advice = "BUY";
+                } else if ($macd[$i] < $signal[$i] && $macd[$i - 1] >= $signal[$i - 1]) {
+                    /* The other way around */
+                    $advice = "SELL";                   
+                } else {
+                    /* Do nothing if not crossed */
+                    $advice = "HOLD";
+                }
+                $myRecentData[$keys[$i]]['advice'] = $advice;
+            }
+            
+            return response()->json([
+                        'symbol' => $symbol,
+                        'ema_short_period' => $ema_short_period,
+                        'ema_long_period' => $ema_long_period,
+                        'signal_period' => $signal_period,
+                        'totalrecentData' => $totalRecentData,
+                        'recentData' => $myRecentData,
+                
+            ]);
+        } else {
+            return response()->json([
+                        'symbol' => $symbol,
+                        'totalrecentData' => 0,
+                        'recentData' => array(),
+            ]);
+        }
+    }
 }

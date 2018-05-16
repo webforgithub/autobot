@@ -230,10 +230,14 @@ class AlertMACDStrategiesCommand extends Command {
                         /** Following price is commented because it giving LOWER price when we are notifiying use for SELL after BUY. **/
                         //$order["price"] = $symbolCurrentPrice;
                         $order["price"] = $lastPrice; 
-                        $order["lastBid"] = $orderBook["lastBid"];
-                        $order["lastAsk"] = $orderBook["lastAsk"];
                         $order["alertdate"] = date("Y-m-d H:i:s");
-
+                        
+                        $buyPrice = $orderBook["lastBid"];
+                        $order["lastBid"] = $orderBook["lastBid"];
+                        
+                        $sellPrice = $orderBook["lastAsk"];
+                        $order["lastAsk"] = $orderBook["lastAsk"];
+                        
                         $recentData = $api->candlesticks($instrument, "3m");
 
                         if (count($recentData) > 0) {
@@ -307,19 +311,19 @@ class AlertMACDStrategiesCommand extends Command {
 
                                 $sendNotification = false;
                                 $tmpAlert = array();
-
+                                
                                 if ($macdData == -1) {
                                     if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
                                         $sendNotification = true;
-
+                                        
                                         $tmpAlert["alert_type"] = "SELL";
                                         $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
                                         $tmpAlert["currency_name"] = $instrument;
-                                        /** BELOW LINE is commented becuase it's showing LOWER PRICE when SELLING after BUYING **/
-                                        //$tmpAlert["currency_price"] = $symbolCurrentPrice;
-                                        $tmpAlert["currency_price"] = $lastPrice;
                                         $tmpAlert["user_id"] = $instrumentObj->userid;
                                         $tmpAlert["configuremacdbot_id"] = $configurationId;
+                                        /** BELOW LINE is commented becuase it's showing LOWER PRICE when SELLING after BUYING **/
+                                        //$tmpAlert["currency_price"] = $symbolCurrentPrice;
+                                        $tmpAlert["currency_price"] = $sellPrice;
                                     }
                                 } else if ($macdData == 1) {
                                     if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
@@ -328,17 +332,19 @@ class AlertMACDStrategiesCommand extends Command {
                                         $tmpAlert["alert_type"] = "BUY";
                                         $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
                                         $tmpAlert["currency_name"] = $instrument;
-                                        /** BELOW LINE is commented becuase it's showing LOWER PRICE when SELLING after BUYING **/
-                                        //$tmpAlert["currency_price"] = $symbolCurrentPrice;
-                                        $tmpAlert["currency_price"] = $lastPrice;
                                         $tmpAlert["user_id"] = $instrumentObj->userid;
                                         $tmpAlert["configuremacdbot_id"] = $configurationId;
+                                        /** BELOW LINE is commented becuase it's showing LOWER PRICE when SELLING after BUYING **/
+                                        //$tmpAlert["currency_price"] = $symbolCurrentPrice;
+                                        $tmpAlert["currency_price"] = $buyPrice;
                                     }
                                 }
 
                                 $tmpCount = count($tmpAlert);
                                 if ($sendNotification === true && $tmpCount > 0) {
                                     $this->output->write("- TIME DIFFERENT BETWEEN ORDER: " . $minutes, true);
+                                    $this->output->write("- BuyPrice: " . $buyPrice, true);
+                                    $this->output->write("- SellPrice: " . $sellPrice, true);
 
                                     Alert::create($tmpAlert);
 
@@ -381,5 +387,4 @@ class AlertMACDStrategiesCommand extends Command {
 //        }
         return null;
     }
-
 }

@@ -25,12 +25,26 @@
     <body style="padding-top: 0px;">
         <div class="box box-success">
             <div class="box-header">
-                <label>Symbol</label>
-                <select id="symbol" name="symbol" class="form-control select2-hidden-accessible" required="1" data-placeholder="Enter Trade Symbol" rel="select2" name="dept" tabindex="-1" aria-hidden="true" aria-required="true">
-                    @foreach( $symbols as $col )
-                    <option @if(strtoupper($col->col) == 'IOTABTC') selected='selected' @endif values='{{ strtoupper($col->col) }}'>{{ strtoupper($col->col) }}</option>                        
-                    @endforeach
-                </select>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label>Symbol</label>
+                        <select id="symbol" name="symbol" class="form-control select2-hidden-accessible" required="1" data-placeholder="Enter Trade Symbol" rel="select2" name="dept" tabindex="-1" aria-hidden="true" aria-required="true">
+                            @foreach( $symbols as $col )
+                            <option @if(strtoupper($col->col) == 'IOTABTC') selected='selected' @endif values='{{ strtoupper($col->col) }}'>{{ strtoupper($col->col) }}</option>                        
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label>Ticker points</label>
+                        <select id="tickerPoint" name="tickerPoint" class="form-control">
+                            <option value="200" selected="selected">200</option>
+                            <option value="400">400</option>
+                            <option value="600">600</option>
+                            <option value="800">800</option>
+                            <option value="999">999</option>
+                        </select>
+                    </div>
+                </div>
             </div>
             <div class="box-body">
                 <div class="row">
@@ -49,12 +63,12 @@
         <script src="{{ asset('la-assets/plugins/dropzone/dropzone.js') }}" type="text/javascript"></script>
         @include('la.layouts.partials.scripts')
         <script src="//cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.bundle.min.js"></script>
-        <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.13.0/moment.min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.2/moment.min.js"></script>        
         <script src="{{ asset('la-assets/js/utils.js') }}"></script>
         <script>          
             
         var fnGenerateChart = function () {
-            $.getJSON("{{ url('/get-chart') }}/" + $("#symbol option:selected").val(), function (data) {
+            $.getJSON("{{ url('/get-chart') }}/" + $("#symbol option:selected").val() + "/" + $("#tickerPoint option:selected").val(), function (data) {
                 // split the data set into ohlc and volume
                 var openDS = [],
                     highDS = [],
@@ -64,10 +78,12 @@
                     macd = [];
                     signal = [];
                     hist = [];
+                    macdAdvise = [];
                     macd1 = signal1 = hist1 = [];
                 
                 $.each(data.recentData, function (key, item) {
-                    dateTime.push(data.recentData[key]["keyTime"]);
+                    //dateTime.push(data.recentData[key]["keyTime"]);
+                    dateTime.push(data.recentData[key]["closeTime"]);
                     openDS.push(parseFloat(data.recentData[key]["open"] * 100000).toFixed(6));
                     highDS.push(parseFloat(data.recentData[key]["high"] * 100000).toFixed(6));
                     lowDS.push(parseFloat(data.recentData[key]["low"] * 100000).toFixed(6));
@@ -76,6 +92,7 @@
                     macd.push(parseFloat(data.recentData[key]["macd"] * 100000).toFixed(6));
                     signal.push(parseFloat(data.recentData[key]["macds"] * 100000).toFixed(6));
                     hist.push(parseFloat(data.recentData[key]["macdh"] * 100000).toFixed(6));
+                    macdAdvise.push(data.recentData[key]['advice']);
                 });
                 
                 var minArray = [Math.min.apply(Math, macd), Math.min.apply(Math, signal), Math.min.apply(Math, hist)];
@@ -118,8 +135,6 @@
                             },
                             {
                                 label: 'MACDH',
-//                                backgroundColor: window.chartColors.green,
-//                                borderColor: window.chartColors.green,
                                 backgroundColor: colours,
                                 borderColor: colours,
                                 borderWidth: 1,
@@ -128,7 +143,7 @@
                                 lineTension: 0, 
                                 cubicInterpolationMode: 'default', 
                                 radius: 0
-                            }
+                            }                   
                         ]
                     },
                     options: {
@@ -139,7 +154,17 @@
                         },
                         tooltips: {
                             mode: 'index',
-                            intersect: false
+                            intersect: false,
+                            callbacks: {
+                                // Use the footer callback to display the sum of the items showing in the tooltip
+                                afterBody: function(tooltipItems, data) {
+                                    var adviseText = '';
+                                    tooltipItems.forEach(function(tooltipItem) {
+                                            adviseText = '- Advise: ' + macdAdvise[tooltipItem.index];
+                                    });
+                                    return adviseText;
+                                }
+                            }
                         },
                         hover: {
                             mode: 'nearest',
@@ -152,6 +177,15 @@
                                     scaleLabel: {
                                         display: true,
                                         labelString: 'Date/Time'
+                                    },
+                                    ticks: {
+                                        callback: function(value, index, values) {
+                                            if(index % 3 === 0) {
+                                                var myDate = new Date(value);
+                                                return myDate.getMonth() + 1 + "-" + myDate.getDate()+ "-" + myDate.getFullYear();
+                                            }
+                                            return "";
+                                        }
                                     }
                                 }],
                             yAxes: [{
@@ -165,7 +199,7 @@
                                         max: calMax,
                                         beginAtZero: true,
                                         userCallback: function (label, index, labels) {
-                                            return parseFloat(label).toFixed(6);
+                                            return parseFloat(label).toFixed(3);
                                         }
                                     }
                                 }]
@@ -239,7 +273,16 @@
                         },
                         tooltips: {
                             mode: 'index',
-                            intersect: false
+                            intersect: false,
+                            callbacks: {
+                                afterBody: function(tooltipItems, data) {
+                                    var adviseText = '';
+                                    tooltipItems.forEach(function(tooltipItem) {
+                                            adviseText = '- Advise: ' + macdAdvise[tooltipItem.index];
+                                    });
+                                    return adviseText;
+                                }
+                            }
                         },
                         hover: {
                             mode: 'nearest',
@@ -252,8 +295,14 @@
                                         display: true,
                                         labelString: 'Date/Time'
                                     },
-                                    tickFormat: function (d) {
-                                        return new Date(d);
+                                    ticks: {
+                                        callback: function(value, index, values) {
+                                            if(index % 3 === 0) {
+                                                var myDate = new Date(value);
+                                                return myDate.getMonth() + 1 + "-" + myDate.getDate()+ "-" + myDate.getFullYear();
+                                            }
+                                            return "";
+                                        }
                                     },
                                     showMaxMin: false
                                 }],
@@ -268,7 +317,7 @@
                                         max: calMax,
                                         beginAtZero: true,
                                         userCallback: function (label, index, labels) {
-                                            return parseFloat(label).toFixed(6);
+                                            return parseFloat(label).toFixed(3);
                                         }
                                     }
                                 }]
@@ -282,6 +331,9 @@
 
         $(function () {
             $('#symbol').on('change', function (e) {
+                fnGenerateChart();
+            });
+            $('#tickerPoint').on('change', function (e) {
                 fnGenerateChart();
             });
             fnGenerateChart();

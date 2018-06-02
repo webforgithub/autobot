@@ -160,7 +160,7 @@ class ChartController extends Controller {
      * @param type $symbol
      * @return type
      */
-    public function getChart($symbol) {
+    public function getChart($symbol, $tickerPoint = 100) {
 //        @ini_set('precision', '10');
 //        @ini_set('trader.real_precision', '10');
 //        @date_default_timezone_set('Europe/Amsterdam');
@@ -237,6 +237,8 @@ class ChartController extends Controller {
                 }
                 $myRecentData[$keys[$i]]['advice'] = $advice;
             }
+            
+            $myRecentData = array_slice($myRecentData, 0, $tickerPoint);
             
             return response()->json([
                         'symbol' => $symbol,

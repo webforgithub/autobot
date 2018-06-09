@@ -193,8 +193,28 @@ class ChartController extends Controller {
                 }
             }
             
+            $tz = new \DateTimeZone('Europe/Amsterdam');
             
-            array_walk($myRecentData, function(&$item, $key) {
+            array_walk($myRecentData, function(&$item, $key) use ($tz) {
+                $item["closeTimeL"] = $item["closeTime"];
+                $item["openTimeL"] = $item["openTime"];
+                
+                $closeTime = new \DateTime(date("Y-m-d H:i:s", ($item["closeTime"] / 1000)));
+                $closeTime->setTimezone($tz);                              
+                $item["closeTime"] = $closeTime->format('Y-m-d H:i:s');
+                
+                $openTime = new \DateTime(date("Y-m-d H:i:s", ($item["openTime"] / 1000)));
+                $openTime->setTimezone($tz);                              
+                $item["openTime"] = $closeTime->format('Y-m-d H:i:s');
+                
+                $date = new \DateTime(date("Y-m-d H:i:s", ($key / 1000)));
+                $date->setTimezone($tz);                
+                $item["keyTime"] = $date->format('Y-m-d H:i:s');
+                
+                $item["timestamp"] = ($key);
+                
+                /** Following lines are commented due to wrong TimeZone  **/
+                /*
                 $timeZoneOffSet = 3.30 * 3600;
                 $item["closeTimeL"] = $item["closeTime"];
                 $item["openTimeL"] = $item["openTime"];
@@ -202,6 +222,7 @@ class ChartController extends Controller {
                 $item["openTime"] = date("Y-m-d H:i:s", (($item["openTime"] + $timeZoneOffSet) / 1000));
                 $item["keyTime"] = date("Y-m-d", (($key + $timeZoneOffSet) / 1000));
                 $item["timestamp"] = ($key);
+                */                
             });
 
             $closeArray = array_values(array_map(function($sub) {
@@ -238,7 +259,9 @@ class ChartController extends Controller {
                 $myRecentData[$keys[$i]]['advice'] = $advice;
             }
             
+            $myRecentData = array_reverse($myRecentData);
             $myRecentData = array_slice($myRecentData, 0, $tickerPoint);
+            $myRecentData = array_reverse($myRecentData);
             
             return response()->json([
                         'symbol' => $symbol,

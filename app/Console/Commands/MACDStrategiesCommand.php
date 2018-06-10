@@ -184,7 +184,7 @@ class MACDStrategiesCommand extends Command {
                             $closeArray["close"] = array_values($tmpCloseArray);
 
                             $oldMACD = trader_macd($closeArray["close"], $instrumentObj->ema_short_period, $instrumentObj->ema_long_period, $instrumentObj->signal_period);
-                            $this->output->write("----------------------- MACD " . $instrumentObj->ema_short_period . '=' . $instrumentObj->ema_long_period . '=' . $instrumentObj->signal_period . "  -----------------------------", true);
+                            $this->output->write("----------------------- MACD ". $instrumentObj->ema_short_period .'='. $instrumentObj->ema_long_period .'='. $instrumentObj->signal_period ."  -----------------------------", true);
                             
                             $macd = $oldMACD[0];
                             $signal = $oldMACD[1];

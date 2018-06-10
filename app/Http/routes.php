@@ -16,7 +16,7 @@ Route::get('/', function () {
 });
 
 Route::get('chart', 'ChartController@index');
-Route::get('get-chart/{symbol}', 'ChartController@getChart');
+Route::get('get-chart/{symbol}/{tickerPoint}', 'ChartController@getChart');
 
 /* ================== Homepage + Admin Routes ================== */
 

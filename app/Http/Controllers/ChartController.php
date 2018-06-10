@@ -154,7 +154,13 @@ class ChartController extends Controller {
         return $ret;
     }
 
-    public function getChart($symbol) {
+    /**
+     * Get the MACD Chart based in user selection and MACD settings
+     * 
+     * @param type $symbol
+     * @return type
+     */
+    public function getChart($symbol, $tickerPoint = 100) {
 //        @ini_set('precision', '10');
 //        @ini_set('trader.real_precision', '10');
 //        @date_default_timezone_set('Europe/Amsterdam');
@@ -170,7 +176,45 @@ class ChartController extends Controller {
         $totalRecentData = count($myRecentData);
         
         if ($totalRecentData > 0) {
-            array_walk($myRecentData, function(&$item, $key) {
+            $ema_short_period = 12;
+            $ema_long_period = 26;
+            $signal_period = 9;
+            
+            if( Auth::check()) {
+                $symbols = DB::table('configuremacdbots')->select("*")
+                        ->where('userid', '=', Auth::user()->id)
+                        ->where('symbol', '=', $symbol)
+                        ->whereNull('deleted_at')
+                        ->get();
+                if(count($symbols) > 0) {
+                    $ema_short_period = $symbols[0]->ema_short_period;
+                    $ema_long_period = $symbols[0]->ema_long_period;
+                    $signal_period = $symbols[0]->signal_period;
+                }
+            }
+            
+            $tz = new \DateTimeZone('Europe/Amsterdam');
+            
+            array_walk($myRecentData, function(&$item, $key) use ($tz) {
+                $item["closeTimeL"] = $item["closeTime"];
+                $item["openTimeL"] = $item["openTime"];
+                
+                $closeTime = new \DateTime(date("Y-m-d H:i:s", ($item["closeTime"] / 1000)));
+                $closeTime->setTimezone($tz);                              
+                $item["closeTime"] = $closeTime->format('Y-m-d H:i:s');
+                
+                $openTime = new \DateTime(date("Y-m-d H:i:s", ($item["openTime"] / 1000)));
+                $openTime->setTimezone($tz);                              
+                $item["openTime"] = $closeTime->format('Y-m-d H:i:s');
+                
+                $date = new \DateTime(date("Y-m-d H:i:s", ($key / 1000)));
+                $date->setTimezone($tz);                
+                $item["keyTime"] = $date->format('Y-m-d H:i:s');
+                
+                $item["timestamp"] = ($key);
+                
+                /** Following lines are commented due to wrong TimeZone  **/
+                /*
                 $timeZoneOffSet = 3.30 * 3600;
                 $item["closeTimeL"] = $item["closeTime"];
                 $item["openTimeL"] = $item["openTime"];
@@ -178,21 +222,21 @@ class ChartController extends Controller {
                 $item["openTime"] = date("Y-m-d H:i:s", (($item["openTime"] + $timeZoneOffSet) / 1000));
                 $item["keyTime"] = date("Y-m-d", (($key + $timeZoneOffSet) / 1000));
                 $item["timestamp"] = ($key);
+                */                
             });
 
             $closeArray = array_values(array_map(function($sub) {
                         return $sub['close'];
                     }, $myRecentData));
                     
-//          $closeArray = array(22.27,22.19,22.08,22.17,22.18,22.13,22.23,22.43,22.24,22.29,22.15,22.39,22.38,22.61,23.36,24.05,23.75,23.83,23.95,23.63,23.82,23.87,23.65,23.19,23.10,23.33,22.68,23.10,22.40,22.17);
-            
+//          $closeArray = array(22.27,22.19,22.08,22.17,22.18,22.13,22.23,22.43,22.24,22.29,22.15,22.39,22.38,22.61,23.36,24.05,23.75,23.83,23.95,23.63,23.82,23.87,23.65,23.19,23.10,23.33,22.68,23.10,22.40,22.17);            
             $macdData = [];
-            $ema_fast = Average::exponentialMovingAverage($closeArray, 12);
-            $ema_slow = Average::exponentialMovingAverage($closeArray, 26);
+            $ema_fast = Average::exponentialMovingAverage($closeArray, $ema_short_period); /** 12 **/
+            $ema_slow = Average::exponentialMovingAverage($closeArray, $ema_long_period); /** 26 **/
             $macd = $signal = $hist = array();
             
             $macd = $this->subtractTwoArray($ema_fast, $ema_slow);
-            $signal = Average::exponentialMovingAverage($macd, 9);
+            $signal = Average::exponentialMovingAverage($macd, $signal_period);       /** 9 **/
             $hist = $this->subtractTwoArray($macd, $signal);
             
             $keys = array_keys($myRecentData);
@@ -215,10 +259,18 @@ class ChartController extends Controller {
                 $myRecentData[$keys[$i]]['advice'] = $advice;
             }
             
+            $myRecentData = array_reverse($myRecentData);
+            $myRecentData = array_slice($myRecentData, 0, $tickerPoint);
+            $myRecentData = array_reverse($myRecentData);
+            
             return response()->json([
                         'symbol' => $symbol,
+                        'ema_short_period' => $ema_short_period,
+                        'ema_long_period' => $ema_long_period,
+                        'signal_period' => $signal_period,
                         'totalrecentData' => $totalRecentData,
-                        'recentData' => $myRecentData
+                        'recentData' => $myRecentData,
+                
             ]);
         } else {
             return response()->json([

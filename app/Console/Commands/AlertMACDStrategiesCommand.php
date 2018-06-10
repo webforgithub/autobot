@@ -182,29 +182,29 @@ class AlertMACDStrategiesCommand extends Command {
             $this->info("Running the DEMO test of all the strategies:");
         }
 
-        echo "PRESS 'q' TO QUIT AND CLOSE ALL POSITIONS\n\n\n";
-        stream_set_blocking(STDIN, 0);
+//        echo "PRESS 'q' TO QUIT AND CLOSE ALL POSITIONS\n\n\n";
+//        stream_set_blocking(STDIN, 0);
 
-        while (1) {
+//        while (1) {
 
-            if (ord(fgetc(STDIN)) == 113) {
-                /*  try to catch keypress 'q'  */
-                echo "QUIT detected...";
-                return null;
-            }
+//            if (ord(fgetc(STDIN)) == 113) {
+//                /*  try to catch keypress 'q'  */
+//                echo "QUIT detected...";
+//                return null;
+//            }
 
             $symbols = DB::table('configuremacdbots')
                     ->select("*")
                     ->whereNull('deleted_at')
                     ->get();
 
-            $this->output->write("-----------------------  ALERT LOOP IS STARTED  -----------------------------", true);
-            
+            $this->output->write("-----------------------  ALERT LOOP IS STARTED :: " .\Carbon\Carbon::today()->toDayDateTimeString()." -----------------------------", true);
+
             foreach ($symbols as $instrumentObj) {
                 $userObj = DB::table('users')->select("*")->where('id', "=", $instrumentObj->userid)->get();
 
                 if (count($userObj) > 0) {
-                    $this->output->write("- USER ID :: " . $instrumentObj->userid, true);
+                    $this->output->write("************************************ USER ID :: " . $instrumentObj->userid, true);
                     $this->output->write("- COIN PAIR " . $instrumentObj->symbol, true);
 
                     $userObj = $userObj[0];
@@ -217,20 +217,27 @@ class AlertMACDStrategiesCommand extends Command {
                         $instrument = $instrumentObj->symbol;
 
                         $symbolCurrentPrice = $api->symbolPrice($instrument);
-                        $symbolCurrentPrice = number_format(round((float) $symbolCurrentPrice, 8), 8, '.', ' ');
+                        $symbolCurrentPrice = number_format((float) $symbolCurrentPrice, 8, '.', ' ');
 
                         # Fetches the ticker price
                         $lastPrice = $this->getTicker($api, $instrument);
+                        $lastPrice = number_format((float) $lastPrice, 8, '.', ' ');
 
                         # Order book prices (lastBid, lastAsk)
                         $orderBook = $this->getOrderBook($api, $instrument);
 
                         $order = array();
-                        $order["price"] = $symbolCurrentPrice;
-                        $order["lastBid"] = $orderBook["lastBid"];
-                        $order["lastAsk"] = $orderBook["lastAsk"];
+                        /** Following price is commented because it giving LOWER price when we are notifiying use for SELL after BUY. **/
+                        //$order["price"] = $symbolCurrentPrice;
+                        $order["price"] = $lastPrice; 
                         $order["alertdate"] = date("Y-m-d H:i:s");
-
+                        
+                        $buyPrice = $orderBook["lastBid"];
+                        $order["lastBid"] = $orderBook["lastBid"];
+                        
+                        $sellPrice = $orderBook["lastAsk"];
+                        $order["lastAsk"] = $orderBook["lastAsk"];
+                        
                         $recentData = $api->candlesticks($instrument, "3m");
 
                         if (count($recentData) > 0) {
@@ -249,13 +256,13 @@ class AlertMACDStrategiesCommand extends Command {
                             $lastOrderType = 'BUYSELL';
                             $this->defaultWaitTime = 0;
                             $minutes = 0;
-                            
+
                             if (count($lastBuySellOrder) > 0) {
                                 $lastTradeTime = $lastBuySellOrder[0]->alert_time;
                                 $lastOrderType = $lastBuySellOrder[0]->alert_type;
                                 $minutes = (time() - strtotime($lastTradeTime)) / 60;
                             }
-                            
+
                             /** https://simplecrypt.co/strategy.html * */
                             //$macdData = $indicators->macd($instrument, $closeArray, $instrumentObj->ema_short_period, $instrumentObj->ema_long_period, $instrumentObj->signal_period);
 
@@ -265,106 +272,119 @@ class AlertMACDStrategiesCommand extends Command {
                             $macd = array();
                             $signal = array();
                             $hist = array();
-                            
+
                             $macd = $this->subtractTwoArray($ema_fast, $ema_slow);
-                            
+
                             $signal = Average::exponentialMovingAverage($macd, $instrumentObj->signal_period);
                             $hist = $this->subtractTwoArray($macd, $signal);
                             $loopIndex = count($macd);
+                            
+                            $macdSignal = null;
 
                             if ($loopIndex > 0) {
-                                for ($index = $loopIndex - 1; $index < $loopIndex; $index++) {
+                                $keys = array_keys($recentData);
+                                for ($index = 1; $index < $loopIndex; $index++) {
                                     if ($macd[$index] > $signal[$index] && $macd[$index - 1] <= $signal[$index - 1]) {
-                                        /* If the MACD crosses the signal line upward  */
-                                        $macdData = 1;
-                                        $this->output->write("----------------------------------------------------- BUY <*****<", true);
+                                        /* If the MACD crosses the signal line upward */
+                                        $macdData = 1;      /** BUY * */
                                     } else if ($macd[$index] < $signal[$index] && $macd[$index - 1] >= $signal[$index - 1]) {
                                         /* The other way around */
-                                        $macdData = -1;
-                                        $this->output->write("----------------------------------------------------- SELL >*****>", true);
+                                        $macdData = -1;     /** SELL * */
                                     } else {
                                         /* Do nothing if not crossed */
-                                        $macdData = 0;
-                                        $this->output->write("----------------------------------------------------- HOLD >----->", true);
+                                        $macdData = 0;      /** HOLD * */
                                     }
+                                    $recentData[$keys[$index]]['advice'] = $macdData;
                                 }
                             }
                             
-                            /* BUY(1)/ HOLD(0) / SELL(-1) * */
-                            $arrayMACD = array(-1 => "SELL", 0 => "Hold", 1 => "BUY");
+                            $macdSignal = array_pop($recentData);
+                            
+                            if (is_array($macdSignal) && $macdSignal != null) {
+                                $macdData = $macdSignal['advice'];
 
-                            $this->output->write("- MACD ALERT TYPE: " . $arrayMACD[$macdData], true);
-                            $this->output->write("- LAST TRANSACTION: " . $lastOrderType, true);
+                                /** BUY(1) / HOLD(0) / SELL(-1) **/
+                                $arrayMACD = array(-1 => "SELL", 0 => "Hold", 1 => "BUY");
 
-                            $sendNotification = false;
-                            $tmpAlert = array();
+                                $this->output->write("- LAST TRANSACTION: " . $lastOrderType, true);
+                                $this->output->write("----------> MACD ALERT TYPE: " . $arrayMACD[$macdData], true);
 
-                            if ($macdData == -1) {
-                                if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
-                                    $sendNotification = true;
+                                $sendNotification = false;
+                                $tmpAlert = array();
+                                
+                                if ($macdData == -1) {
+                                    if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
+                                        $sendNotification = true;
+                                        
+                                        $tmpAlert["alert_type"] = "SELL";
+                                        $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
+                                        $tmpAlert["currency_name"] = $instrument;
+                                        $tmpAlert["user_id"] = $instrumentObj->userid;
+                                        $tmpAlert["configuremacdbot_id"] = $configurationId;
+                                        /** BELOW LINE is commented becuase it's showing LOWER PRICE when SELLING after BUYING **/
+                                        //$tmpAlert["currency_price"] = $symbolCurrentPrice;
+                                        $tmpAlert["currency_price"] = $sellPrice;
+                                    }
+                                } else if ($macdData == 1) {
+                                    if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
+                                        $sendNotification = true;
 
-                                    $tmpAlert["alert_type"] = "SELL";
-                                    $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
-                                    $tmpAlert["currency_name"] = $instrument;
-                                    $tmpAlert["currency_price"] = $symbolCurrentPrice;
-                                    $tmpAlert["user_id"] = $instrumentObj->userid;
-                                    $tmpAlert["configuremacdbot_id"] = $configurationId;
+                                        $tmpAlert["alert_type"] = "BUY";
+                                        $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
+                                        $tmpAlert["currency_name"] = $instrument;
+                                        $tmpAlert["user_id"] = $instrumentObj->userid;
+                                        $tmpAlert["configuremacdbot_id"] = $configurationId;
+                                        /** BELOW LINE is commented becuase it's showing LOWER PRICE when SELLING after BUYING **/
+                                        //$tmpAlert["currency_price"] = $symbolCurrentPrice;
+                                        $tmpAlert["currency_price"] = $buyPrice;
+                                    }
                                 }
-                            } else if ($macdData == 1) {
 
-                                if ($lastOrderType != $arrayMACD[$macdData] && $minutes >= $this->defaultWaitTime) {
-                                    $sendNotification = true;
+                                $tmpCount = count($tmpAlert);
+                                if ($sendNotification === true && $tmpCount > 0) {
+                                    $this->output->write("- TIME DIFFERENT BETWEEN ORDER: " . $minutes, true);
+                                    $this->output->write("- BuyPrice: " . $buyPrice, true);
+                                    $this->output->write("- SellPrice: " . $sellPrice, true);
 
-                                    $tmpAlert["alert_type"] = "BUY";
-                                    $tmpAlert["alert_time"] = date("Y-m-d H:i:s");
-                                    $tmpAlert["currency_name"] = $instrument;
-                                    $tmpAlert["currency_price"] = $symbolCurrentPrice;
-                                    $tmpAlert["user_id"] = $instrumentObj->userid;
-                                    $tmpAlert["configuremacdbot_id"] = $configurationId;
-                                }
-                            }
+                                    Alert::create($tmpAlert);
 
-                            $tmpCount = count($tmpAlert);
-                            if ($sendNotification === true && $tmpCount > 0) {
-                                $this->output->write("- TIME DIFFERENT BETWEEN ORDER: " . $minutes, true);
+                                    $order["type"] = $tmpAlert["alert_type"];
+                                    $order["alert_type"] = $tmpAlert["alert_type"];
+                                    $order["alert_time"] = date("Y-m-d H:i:s e");
+                                    $order["currency_name"] = $tmpAlert["currency_name"];
+                                    $order["currency_price"] = $tmpAlert["currency_price"];
+                                    $order["user_id"] = $tmpAlert["user_id"];
+                                    $order["configuremacdbot_id"] = $tmpAlert["configuremacdbot_id"];
 
-                                Alert::create($tmpAlert);
+                                    if ($instrumentObj->alert_email != "") {
+                                        $orderObj = array('orderObject' => $order, 'instrumentPair');
 
-                                $order["type"] = $tmpAlert["alert_type"];
-                                $order["alert_type"] = $tmpAlert["alert_type"];
-                                $order["alert_time"] = date("Y-m-d H:i:s e");
-                                $order["currency_name"] = $tmpAlert["currency_name"];
-                                $order["currency_price"] = $tmpAlert["currency_price"];
-                                $order["user_id"] = $tmpAlert["user_id"];
-                                $order["configuremacdbot_id"] = $tmpAlert["configuremacdbot_id"];
+                                        $email = $instrumentObj->alert_email;
+                                        $alertType = $order["alert_type"];
 
-                                if ($instrumentObj->alert_email != "") {
-                                    $orderObj = array('orderObject' => $order, 'instrumentPair');
+                                        $this->output->write("- EMAIL: " . $email, true);
 
-                                    $email = $instrumentObj->alert_email;
-                                    $alertType = $order["alert_type"];
+                                        $isSent = \Mail::send('emails.tradealertnew', ['data' => $orderObj], function ($m) use ($alertType, $email, $instrument) {
+                                                    $m->from('no-reply@autobot.com', 'CryptoBee Trader');
+                                                    $m->cc('parmaramit1111@gmail.com', 'Amit P');
+                                                    $m->cc('scalableapplication@gmail.com', 'Arpit H');
 
-                                    $this->output->write("- EMAIL: " . $email, true);
+                                                    $subject = 'CryptoBee Trader: [' . $alertType . '] alert for ' . $instrument;
 
-                                    $isSent = \Mail::send('emails.tradealertnew', ['data' => $orderObj], function ($m) use ($alertType, $email, $instrument) {
-                                                $m->from('no-reply@autobot.com', 'CryptoBee Trader');
-                                                $m->cc('parmaramit1111@gmail.com', 'Amit P');
-                                                $m->cc('scalableapplication@gmail.com', 'Arpit H');
+                                                    $m->to($email)->subject($subject);
+                                                });
 
-                                                $subject = 'CryptoBee Trader: [' . $alertType . '] alert for ' . $instrument;
-
-                                                $m->to($email)->subject($subject);
-                                            });
-
-                                    $this->output->write("- IS SENT?: " . $isSent, true);
+                                        $this->output->write("- IS SENT?: " . $isSent, true);
+                                    }
                                 }
                             }
                         }
                     }
+                    sleep(30);
                 }
-                sleep(30);
             }
-        }
+//            sleep(3 * 60);
+//        }
         return null;
     }
 }

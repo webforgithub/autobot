@@ -58,6 +58,7 @@ class Kernel extends ConsoleKernel {
         $schedule->command('autobot:checkorderstatus')->withoutOverlapping()->everyMinute();
         
         $filePath = storage_path(date('Y-m-d').'-Alert-MACD-BuySell.log');
+//        $schedule->command('autobot:alertmacd_strategies')->withoutOverlapping()->appendOutputTo($filePath)->daily();        
         $schedule->command('autobot:alertmacd_strategies')->withoutOverlapping()->appendOutputTo($filePath)->everyMinute();
 		
 //        $filePath = storage_path(date('Y-m-d').'-MACD-BuySell');
